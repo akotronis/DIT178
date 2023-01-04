@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 import sys
 from pyspark import SparkConf, SparkContext
+from tabulate import tabulate
 
 def main(args):
     start_time = time.time()
@@ -79,10 +80,10 @@ def main(args):
     
     # Broadcast above RDD as dictionary (small size)
     nodes_with_neighbors_brd = sc.broadcast(nodes_with_neighbors.collectAsMap())
-    print(f"Size of 'nodes_with_neighbors_brd' var: {sys.getsizeof(nodes_with_neighbors_brd.value) / 1024 **2:.2f}mb")
+    size_of_nodes_with_neighbors_brd_txt = f"Size of 'nodes_with_neighbors_brd' var: {sys.getsizeof(nodes_with_neighbors_brd.value) / 1024 **2:.2f}mb"
     # Broadcast nodes list
     nodes = sc.broadcast(list(nodes_with_neighbors_brd.value.keys()))
-    print(f"Size of 'nodes' var: {sys.getsizeof(nodes.value) / 1024 **2:.2f}mb")
+    size_of_nodes_brd_txt = f"Size of 'nodes' var: {sys.getsizeof(nodes.value) / 1024 **2:.2f}mb"
 
     # Define combination of not connected nodes with scores
     scored_edges = nodes_with_neighbors\
@@ -95,15 +96,18 @@ def main(args):
         .takeOrdered(args.edges_number, key=lambda x: -x[-1])
 
     # Print top k scores
-    score_var = f"score: {args.score_metric if args.score_metric in ['jc', 'aa'] else 'cn'}" 
-    print(36 * '=' + '\n' + f" File: {args.input} ".center(36, '=') + '\n' + 36 * '=')
-    print(f"{'node 1':^10} | {'node 2':^10} | {score_var:^10}")
-    print(36 * '=')
-    for result in selected_results:
-        if args.score_metric in ['jc', 'aa']:
-            print(f" {result[0][0]:<9} | {result[0][1]:<10} | {result[1]:<.3f}")
-        else:
-            print(f" {result[0][0]:<9} | {result[0][1]:<10} | {result[1]:<.0f}")
+    score_var = f"score: {args.score_metric if args.score_metric in ['jc', 'aa'] else 'cn'}"
+    headers = ['Node 1', 'Node 2', score_var]
+    index = range(1, len(selected_results) + 1)
+    data = [[x[0][0], x[0][1], x[1]] for x in selected_results]
+    tabulate_data = tabulate(data, headers=headers, showindex=index, tablefmt='fancy_outline')
+
+    print(80*'=')
+    print(f" File: {args.input} ".center(80, '='))
+    print(80*'=')
+    print(size_of_nodes_with_neighbors_brd_txt)
+    print(size_of_nodes_brd_txt)
+    print(tabulate_data)
 
     # Close spark context
     sc.stop()
@@ -112,6 +116,7 @@ def main(args):
     m, s = divmod(time.time() - start_time, 60)
     h, m = divmod(m, 60)
     print("Execution time: %d:%02d:%02d" % (h, m, s))
+    print(80*'=')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='DIT178 - Project')
